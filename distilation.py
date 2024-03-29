@@ -17,7 +17,7 @@ from datetime import datetime
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
-#   The Infrared Only
+#   The Visible Only
 #   Version: Without any distillation
 #################################
 
@@ -108,7 +108,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             #     feature_map_teacher = feature_map_teacher.float().detach()
             #     print(f"This is the shape of teacher:{output_teacher.shape}")
             # feature_map = feature_map_teacher.detach().to(device)
-            output_student, feature_map_student = student(img_a, None)
+            output_student, feature_map_student = student(img_b, None)
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             # output_student = output_student.float()
