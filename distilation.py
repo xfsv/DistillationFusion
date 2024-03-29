@@ -62,7 +62,7 @@ def initial_the_teacher_fusion_model(args):
 
 
 def logger(model_name, loss_value):
-    log_dir = r"\SwinFusion-master\distillation_train_log"
+    log_dir = r".\distillation_train_log"
     os.makedirs(log_dir, exist_ok=True)
 
     current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -126,22 +126,22 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             outputs, _ = student(temp_img_b, None)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
-            save_dir = r'\SwinFusion-master\distillation_result'
+            save_dir = r'.\distillation_result'
             save_name = os.path.join(save_dir, os.path.basename(temp_img_name))
             util.imsave(outputs, save_name)
         loss_log.append(running_loss)
         print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss} ,Used time: {end - start}")
     logger(model_name=model_name, loss_value=loss_log)
     model = student
-    torch.save(model.state_dict(), '/SwinFusion-master/distillation_model/model_weights.pth')
-    torch.save(model, '/SwinFusion-master/distillation_model/model.pth')
+    torch.save(model.state_dict(), './distillation_model/model_weights.pth')
+    torch.save(model, './distillation_model/model.pth')
 
 
 def output_the_result(model, inputs, img_name):
     outputs = model(inputs)
     outputs = outputs.detach().float()
     outputs = util.tensor2uint(outputs)
-    save_dir = r'D:\SwinFusion-master\distillation_result'
+    save_dir = r'.\distillation_result'
     save_name = os.path.join(save_dir, os.path.basename(img_name))
     util.imsave(outputs, save_name)
 

@@ -12,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 
 def logger(model_name, loss_value):
-    log_dir = r"\SwinFusion-master\distillation_test_log"
+    log_dir = r".\distillation_test_log"
 
     current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     log_filename = f"testing_{current_time}.log"
@@ -28,14 +28,14 @@ def logger(model_name, loss_value):
 
 def main():
 
-    model = torch.load('D:/SwinFusion-master/distillation_model/model.pth')
-    model.load_state_dict(torch.load('D:/SwinFusion-master/distillation_model/model_weights.pth'))
+    model = torch.load('./distillation_model/model.pth')
+    model.load_state_dict(torch.load('./distillation_model/model_weights.pth'))
     model_name = 'distillation_Unet'
     loss_fn = loss()
     loss_log = []
 
-    a_path = r'\SwinFusion-master\Dataset\testsets\MSRS\IR'
-    b_path = r'\SwinFusion-master\Dataset\testsets\MSRS\VI_Y'
+    a_path = r'.\Dataset\testsets\MSRS\IR'
+    b_path = r'.\Dataset\testsets\MSRS\VI_Y'
     test_set = D(a_path, b_path, 1)
     test_loader = DataLoader(test_set, batch_size=1,
                              shuffle=False, num_workers=1,
@@ -52,7 +52,7 @@ def main():
         loss_log.append(running_loss)
         outputs = outputs.detach()[0].float().cpu()
         outputs = util.tensor2uint(outputs)
-        save_dir = r'\SwinFusion-master\distillation_result'
+        save_dir = r'.\distillation_result'
         save_name = os.path.join(save_dir, os.path.basename(image_name))
         util.imsave(outputs, save_name)
         end = time.time()
