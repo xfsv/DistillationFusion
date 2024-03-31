@@ -29,7 +29,6 @@ def logger(model_name, loss_value):
 def main():
 
     model = torch.load('./distillation_model/model.pth')
-    model.load_state_dict(torch.load('./distillation_model/model_weights.pth'))
     model_name = 'distillation_Unet'
     loss_fn = loss()
     loss_log = []
