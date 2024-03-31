@@ -17,8 +17,8 @@ from datetime import datetime
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
-#   The Infrared Only
-#   Version: Without any distillation
+#   The Infrared
+#   Version: With the last layer distillation
 #################################
 
 
@@ -102,19 +102,19 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 temp_img_b = img_b
                 temp_img_name = image_name
 
-            # with torch.no_grad():
-            #     output_teacher, feature_map_teacher = teacher(img_a, img_b)
-            #     output_teacher = output_teacher.float().detach()
+            with torch.no_grad():
+                output_teacher, feature_map_teacher = teacher(img_a, img_b)
+                output_teacher = output_teacher.float().detach()
             #     feature_map_teacher = feature_map_teacher.float().detach()
             #     print(f"This is the shape of teacher:{output_teacher.shape}")
             # feature_map = feature_map_teacher.detach().to(device)
             output_student, feature_map_student = student(img_a, None)
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
-            # output_student = output_student.float()
-            # loss_student_teacher = mse_loss(output_student, output_teacher)
+            output_student = output_student.float()
+            loss_student_teacher = mse_loss(output_student, output_teacher)
             # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
-            loss_total = loss_student
+            loss_total = 0.25 * loss_student + 0.75 * loss_student_teacher
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
