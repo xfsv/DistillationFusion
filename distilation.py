@@ -133,7 +133,6 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
         print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss} ,Used time: {end - start}")
     logger(model_name=model_name, loss_value=loss_log)
     model = student
-    torch.save(model.state_dict(), './distillation_model/model_weights.pth')
     torch.save(model, './distillation_model/model.pth')
 
 
@@ -180,7 +179,7 @@ def main():
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 1
+    epochs = 300
     loss_fn = loss()
     learning_rate = 0.001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)

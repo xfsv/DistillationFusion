@@ -29,7 +29,6 @@ def logger(model_name, loss_value):
 def main():
 
     model = torch.load('./distillation_model/model.pth')
-    model.load_state_dict(torch.load('./distillation_model/model_weights.pth'))
     model_name = 'distillation_Unet'
     loss_fn = loss()
     loss_log = []
@@ -40,6 +39,7 @@ def main():
     test_loader = DataLoader(test_set, batch_size=1,
                              shuffle=False, num_workers=1,
                              drop_last=False, pin_memory=True)
+    model.eval()
     for _, test_data in enumerate(test_loader):
         start = time.time()
         image_name = test_data['A_path'][0]

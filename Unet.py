@@ -165,11 +165,11 @@ if __name__ == '__main__':
     x = torch.rand(4, 60, 128, 128)
     y = torch.rand(4, 1, 128, 128)
     net = UNet()
-    print(hasattr(net, 'regressor'))
     net.train()
     x, _ = net(y, x)
     print(x.shape)
     print(_.shape)
+    print(net)
 
 #  不需要加，直接比loss
 
