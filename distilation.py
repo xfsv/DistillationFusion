@@ -5,6 +5,7 @@ import torch.nn as nn
 import time
 import sys
 from models.network_swinfusion1 import SwinFusion as net
+from models.loss_ssim import ssim
 from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
@@ -19,6 +20,7 @@ device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 #################################
 #   The Visible
 #   Version: With the last layer distillation
+#   Interim 1.0 distillation loss: mse -> ssim
 #################################
 
 
@@ -112,7 +114,8 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
-            loss_student_teacher = mse_loss(output_student, output_teacher)
+            loss_student_teacher = 1 - ssim(output_student, output_teacher)
+            # loss_student_teacher = mse_loss(output_student, output_teacher)
             # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
             loss_total = 0.25 * loss_student + 0.75 * loss_student_teacher
             loss_total.backward()  # 这个地方一定要注意！！！！
