@@ -126,7 +126,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if (epoch % 10 == 0) :
-            outputs, _ = student(temp_img_b, None)
+            outputs, _ = student(temp_img_a, None)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'
@@ -178,11 +178,11 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=24,
+    train_loader = DataLoader(train_set, batch_size=16,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 1
+    epochs = 300
     loss_fn = loss()
     learning_rate = 0.001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
