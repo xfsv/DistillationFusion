@@ -20,6 +20,7 @@ device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 #################################
 #   The Infrared
 #   Version: With feature map distillation
+#   distillation loss: mse -> ssim
 #################################
 
 
@@ -113,9 +114,10 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
-            # loss_student_teacher = 1 - ssim(output_student, output_teacher)
-            loss_student_teacher = mse_loss(output_student, output_teacher)
-            loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
+            loss_student_teacher = 1 - ssim(output_student, output_teacher)
+            # loss_student_teacher = mse_loss(output_student, output_teacher)
+            # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
+            loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
             loss_total = 0.1 * loss_student + 0.45 * loss_student_teacher + 0.45 * loss_feature_map
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
@@ -181,7 +183,7 @@ def main():
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 1
+    epochs = 300
     loss_fn = loss()
     learning_rate = 0.001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
