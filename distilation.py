@@ -19,8 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
 #   The Visible
-#   Version: With feature map distillation
-#   Interim 1.0 distillation loss: mse -> ssim
+#   Version: With all layer distillation
 #################################
 
 
@@ -93,6 +92,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
         mse_loss = nn.MSELoss()
         temp_img_name = 0
         temp_img_b = 0
+        temp_img_a = 0
         for batch, train_data in enumerate(train_loader):
             optimizer.zero_grad()
             image_name = train_data['A_path'][0]
@@ -107,17 +107,21 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             with torch.no_grad():
                 output_teacher, feature_map_teacher = teacher(img_a, img_b)
                 output_teacher = output_teacher.float().detach()
-                feature_map_teacher = feature_map_teacher.float().detach()
-                # print(f"This is the shape of teacher:{output_teacher.shape}")
-            output_student, feature_map_student = student(img_b, None)
+                # feature_map_teacher = feature_map_teacher.float().detach()
+            #     print(f"This is the shape of teacher:{output_teacher.shape}")
+            output_student, feature_map_student, loss_list = student(img_b, output_teacher)
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
-            loss_student_teacher = 1 - ssim(output_student, output_teacher)
-            # loss_student_teacher = mse_loss(output_student, output_teacher)
+            # loss_student_teacher = 1 - ssim(output_student, output_teacher)
+            loss_student_teacher = mse_loss(output_student, output_teacher)
             # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
-            loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
-            loss_total = 0.1 * loss_student + 0.45 * loss_student_teacher + 0.45 * loss_feature_map
+            # loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
+            loss_total = torch.tensor(0).float().to(device)
+            for loss_num in loss_list:
+                loss_num.to(device)
+                loss_total += loss_num
+            loss_total += loss_student_teacher.to(device) + 0.1 * loss_student.to(device)
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
@@ -126,7 +130,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if epoch % 10 == 0:
-            outputs, _ = student(temp_img_b, None)
+            outputs = student(temp_img_b, None)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'
@@ -178,13 +182,13 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=16,
+    train_loader = DataLoader(train_set, batch_size=12,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
     epochs = 300
     loss_fn = loss()
-    learning_rate = 0.001
+    learning_rate = 0.0001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
     train_knowledge_distillation(teacher=teacher, student=student, train_loader=train_loader,
