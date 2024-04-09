@@ -46,7 +46,7 @@ def main():
         img_a = test_data['A'].to(device)
         img_b = test_data['B'].to(device)
         with torch.no_grad():
-            outputs, _ = model(img_a)
+            outputs = model(img_a)
         running_loss, _, _, _ = loss_fn(img_a, img_b, outputs)
         running_loss = running_loss.item()
         loss_log.append(running_loss)

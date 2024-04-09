@@ -7,6 +7,32 @@ from torch.nn import functional as F
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+class ConvBNReLU(nn.Sequential):
+    def __init__(self, in_channel, out_channel, kernel_size=3, stride=1, groups=1):
+        padding = (kernel_size - 1) // 2
+        super(ConvBNReLU, self).__init__(
+            nn.Conv2d(in_channel, out_channel, kernel_size, stride, padding, groups=groups, bias=False),
+            nn.BatchNorm2d(out_channel),
+            nn.ReLU6(inplace=True)
+        )
+
+
+class ChangeChannel(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(ChangeChannel, self).__init__()
+        self.DW = ConvBNReLU(in_channel, in_channel, kernel_size=3, stride=1, groups=in_channel)
+        self.PW = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channel)
+        )
+
+    def forward(self, x):
+        x = self.DW(x)
+        x = self.PW(x)
+
+        return x
+
+
 class Conv(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(Conv, self).__init__()
@@ -53,65 +79,6 @@ class UpSample(nn.Module):
         return torch.cat((x, r), dim=1)
 
 
-class AddFeature(nn.Module):
-    def __init__(self):
-        super(AddFeature, self).__init__()
-        self.step1 = nn.Sequential(
-            nn.Conv2d(in_channels=60, out_channels=512, kernel_size=3, padding=1, stride=1),
-            nn.LeakyReLU(),
-            # nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1, stride=1),
-            # nn.LeakyReLU(),
-            # nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1, stride=1),
-            # nn.LeakyReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU()
-        )
-        self.step2 = nn.Sequential(
-            nn.Conv2d(in_channels=60, out_channels=256, kernel_size=3, padding=1, stride=1),
-            nn.LeakyReLU(),
-            # nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1, stride=1),
-            # nn.LeakyReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU()
-        )
-        self.step3 = nn.Sequential(
-            nn.Conv2d(in_channels=60, out_channels=128, kernel_size=3, padding=1, stride=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),
-            nn.LeakyReLU()
-        )
-        self.step4 = nn.Sequential(
-            nn.Conv2d(in_channels=60, out_channels=64, kernel_size=3, padding=1, stride=1),
-            nn.LeakyReLU(),
-        )
-        self.bn1 = nn.BatchNorm2d(512)
-        self.bn2 = nn.BatchNorm2d(256)
-        self.bn3 = nn.BatchNorm2d(128)
-        self.bn4 = nn.BatchNorm2d(64)
-
-    def forward(self, x, step):
-        if step == 1:
-            x = self.step1(x)
-            x = self.bn1(x)
-        elif step == 2:
-            x = self.step2(x)
-            x = self.bn2(x)
-        elif step == 3:
-            x = self.step3(x)
-            x = self.bn3(x)
-        elif step == 4:
-            x = self.step4(x)
-            x = self.bn4(x)
-
-        return x
-
-
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
@@ -139,7 +106,8 @@ class UNet(nn.Module):
             nn.Conv2d(64, 60, kernel_size=3, stride=1, padding=1)
         )
 
-        self.add = AddFeature()
+        self.change = ChangeChannel
+        self.mse = nn.MSELoss()
 
         self.Th = torch.nn.Sigmoid()
         self.pred = torch.nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
@@ -156,20 +124,37 @@ class UNet(nn.Module):
         O3 = self.C8(self.U3(O2, R2))
         O4 = self.C9(self.U4(O3, R1))
 
-        feature_map = self.regressor(O4)
+        loss_list = []
+        if feature is not None and self.training is not None:
+            feature.detach()
+            r1 = self.C1(feature)
+            r2 = self.C2(self.D1(r1))
+            r3 = self.C3(self.D2(r2))
+            r4 = self.C4(self.D3(r3))
+            y1 = self.C5(self.D4(r4))
 
-        return self.Th(self.pred(O4)), feature_map
+            o1 = self.C6(self.U1(y1, r4))
+            loss_list.append(self.mse(o1, O1))
+            o2 = self.C7(self.U2(o1, r3))
+            loss_list.append(self.mse(o2, O2))
+            o3 = self.C8(self.U3(o2, r2))
+            loss_list.append(self.mse(o3, O3))
+            o4 = self.C9(self.U4(o3, r1))
+            loss_list.append(self.mse(o4, O4))
+
+        feature_map = self.regressor(O4)
+        if feature is not None and self.training is not None:
+            return self.Th(self.pred(O4)), feature_map, loss_list
+        else:
+            return self.Th(self.pred(O4))
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 60, 128, 128)
+    x = torch.rand(4, 1, 128, 128)
     y = torch.rand(4, 1, 128, 128)
     net = UNet()
     net.train()
     x, _ = net(y, x)
-    print(x.shape)
-    print(_.shape)
-    print(net)
 
 #  不需要加，直接比loss
 
