@@ -7,30 +7,31 @@ from torch.nn import functional as F
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class ConvBNReLU(nn.Sequential):
-    def __init__(self, in_channel, out_channel, kernel_size=3, stride=1, groups=1):
-        padding = (kernel_size - 1) // 2
-        super(ConvBNReLU, self).__init__(
-            nn.Conv2d(in_channel, out_channel, kernel_size, stride, padding, groups=groups, bias=False),
-            nn.BatchNorm2d(out_channel),
-            nn.ReLU6(inplace=True)
-        )
+class ConvBNReLU(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel_size=3, dilation=1):
+        super(ConvBNReLU, self).__init__()
 
-
-class ChangeChannel(nn.Module):
-    def __init__(self, in_channel, out_channel):
-        super(ChangeChannel, self).__init__()
-        self.DW = ConvBNReLU(in_channel, in_channel, kernel_size=3, stride=1, groups=in_channel)
-        self.PW = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channel)
-        )
+        padding = kernel_size // 2 if dilation == 1 else dilation
+        self.conv = nn.Conv2d(in_ch, out_ch, kernel_size,
+                              padding=padding, dilation=dilation, bias=False)
+        self.bn = nn.BatchNorm2d(out_ch)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.DW(x)
-        x = self.PW(x)
+        return self.relu(self.bn(self.conv(x)))
 
-        return x
+
+class DownConvBNRuLU(ConvBNReLU):
+    def __init__(self, in_ch, out_ch, kernel_size=3,
+                 dilation=1, flag: bool = True):
+        super(DownConvBNRuLU, self).__init__(in_ch, out_ch, kernel_size, dilation)
+        self.down_flag = flag
+
+    def forward(self, x):
+        if self.down_flag:
+            x = F.max_pool2d(x, kernel_size=2, stride=2, ceil_mode=True)
+
+        return self.relu(self.bn(self.conv(x)))
 
 
 class Conv(nn.Module):
@@ -38,13 +39,13 @@ class Conv(nn.Module):
         super(Conv, self).__init__()
 
         self.layer = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(out_channel),
 
             nn.Dropout(0.3),
             nn.LeakyReLU(),
 
-            nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(out_channel),
 
             nn.Dropout(0.4),
@@ -106,7 +107,10 @@ class UNet(nn.Module):
             nn.Conv2d(64, 60, kernel_size=3, stride=1, padding=1)
         )
 
-        self.change = ChangeChannel
+        self.down1 = DownConvBNRuLU(64, 128)
+        self.down2 = DownConvBNRuLU(128, 256)
+        self.down3 = DownConvBNRuLU(256, 512)
+        self.conv = ConvBNReLU(1, 64)
         self.mse = nn.MSELoss()
 
         self.Th = torch.nn.Sigmoid()
@@ -126,21 +130,15 @@ class UNet(nn.Module):
 
         loss_list = []
         if feature is not None and self.training is not None:
-            feature.detach()
-            r1 = self.C1(feature)
-            r2 = self.C2(self.D1(r1))
-            r3 = self.C3(self.D2(r2))
-            r4 = self.C4(self.D3(r3))
-            y1 = self.C5(self.D4(r4))
-
-            o1 = self.C6(self.U1(y1, r4))
-            loss_list.append(self.mse(o1, O1))
-            o2 = self.C7(self.U2(o1, r3))
-            loss_list.append(self.mse(o2, O2))
-            o3 = self.C8(self.U3(o2, r2))
-            loss_list.append(self.mse(o3, O3))
-            o4 = self.C9(self.U4(o3, r1))
-            loss_list.append(self.mse(o4, O4))
+            feature = feature.to(device)
+            o4 = self.conv(feature)
+            loss_list.append(self.mse(O4, o4))
+            o3 = self.down1(o4)
+            loss_list.append(self.mse(O3, o3))
+            o2 = self.down2(o3)
+            loss_list.append(self.mse(O2, o2))
+            o1 = self.down3(o2)
+            loss_list.append(self.mse(O1, o1))
 
         feature_map = self.regressor(O4)
         if feature is not None and self.training is not None:
@@ -150,10 +148,10 @@ class UNet(nn.Module):
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 1, 128, 128)
-    y = torch.rand(4, 1, 128, 128)
-    net = UNet()
+    x = torch.rand(4, 1, 128, 128).to(device)
+    y = torch.rand(4, 1, 128, 128).to(device)
+    net = UNet().to(device)
     net.train()
-    x, _ = net(y, x)
+    x, _, _ = net(y, x)
 
 #  不需要加，直接比loss
