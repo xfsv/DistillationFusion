@@ -13,8 +13,8 @@ from Unet import UNet
 import logging
 import os
 from datetime import datetime
-import pytorch_ssim
-from pytorch_ssim import ssim
+import Total_loss
+from Total_loss import TotalLoss
 
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
@@ -85,7 +85,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
     student.train()
 
     loss_log = []
-    model_name = 'distillation'
+    model_name = 'with all layer distillation 2.0'
     for epoch in range(epochs):
         running_loss = 0
         start = time.time()
@@ -115,7 +115,8 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
             # loss_student_teacher = 1 - ssim(output_student, output_teacher)
-            loss_student_teacher = mse_loss(output_student, output_teacher)
+            loss_last_layer = TotalLoss()
+            loss_student_teacher = loss_last_layer(output_student, output_teacher)
             # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
             # loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
             loss_total = torch.tensor(0).float().to(device)

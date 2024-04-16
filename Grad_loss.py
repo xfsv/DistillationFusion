@@ -35,8 +35,8 @@ class L_Grad(nn.Module):
         return Loss_gradient
 
 if __name__ == '__main__':
-    x = torch.rand(1, 1, 128, 128).cuda()
-    y = torch.rand(1, 1, 128, 128).cuda()
+    x = torch.rand(12, 64, 128, 128).cuda()
+    y = torch.rand(12, 64, 128, 128).cuda()
 
     loss = L_Grad()
     loss_num = loss(x, y)
