@@ -3,6 +3,8 @@ import torchvision.models as models
 import torch.nn as nn
 import numpy as np
 from torch.nn import functional as F
+import Total_loss
+from Total_loss import TotalLoss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -112,6 +114,7 @@ class UNet(nn.Module):
         self.down3 = DownConvBNRuLU(256, 512)
         self.conv = ConvBNReLU(1, 64)
         self.mse = nn.MSELoss()
+        self.total_loss = TotalLoss()
 
         self.Th = torch.nn.Sigmoid()
         self.pred = torch.nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
@@ -132,13 +135,13 @@ class UNet(nn.Module):
         if feature is not None and self.training is not None:
             feature = feature.to(device)
             o4 = self.conv(feature)
-            loss_list.append(self.mse(O4, o4))
+            loss_list.append(self.total_loss(O4, o4))
             o3 = self.down1(o4)
-            loss_list.append(self.mse(O3, o3))
+            loss_list.append(self.total_loss(O3, o3))
             o2 = self.down2(o3)
-            loss_list.append(self.mse(O2, o2))
+            loss_list.append(self.total_loss(O2, o2))
             o1 = self.down3(o2)
-            loss_list.append(self.mse(O1, o1))
+            loss_list.append(self.total_loss(O1, o1))
 
         feature_map = self.regressor(O4)
         if feature is not None and self.training is not None:

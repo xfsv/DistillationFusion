@@ -5,7 +5,6 @@ import torch.nn as nn
 import time
 import sys
 from models.network_swinfusion1 import SwinFusion as net
-from models.loss_ssim import ssim
 from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
@@ -14,6 +13,8 @@ from Unet import UNet
 import logging
 import os
 from datetime import datetime
+import pytorch_ssim
+from pytorch_ssim import ssim
 
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
