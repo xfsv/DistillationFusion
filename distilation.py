@@ -5,7 +5,6 @@ import torch.nn as nn
 import time
 import sys
 from models.network_swinfusion1 import SwinFusion as net
-from models.loss_ssim import ssim
 from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
@@ -14,6 +13,8 @@ from Unet import UNet
 import logging
 import os
 from datetime import datetime
+import Total_loss
+from Total_loss import TotalLoss
 
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
@@ -74,7 +75,7 @@ def logger(model_name, loss_value):
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
 
-    logging.info(f"Model Name: {model_name} Optimizer: AdamW")
+    logging.info(f"Model Name: {model_name} Optimizer: Adam")
     for epoch, loss in enumerate(loss_value, start=1):
         logging.info(f"Epoch {epoch}, Loss: {loss}")
 
@@ -84,7 +85,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
     student.train()
 
     loss_log = []
-    model_name = 'distillation'
+    model_name = 'with all layer distillation 3.0'
     for epoch in range(epochs):
         running_loss = 0
         start = time.time()
@@ -114,7 +115,8 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
             # loss_student_teacher = 1 - ssim(output_student, output_teacher)
-            loss_student_teacher = mse_loss(output_student, output_teacher)
+            loss_last_layer = TotalLoss()
+            loss_student_teacher = loss_last_layer(output_student, output_teacher)
             # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
             # loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
             loss_total = torch.tensor(0).float().to(device)
@@ -182,11 +184,11 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=12,
+    train_loader = DataLoader(train_set, batch_size=16,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 300
+    epochs = 2
     loss_fn = loss()
     learning_rate = 0.0001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
