@@ -110,7 +110,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 output_teacher = output_teacher.float().detach()
                 # feature_map_teacher = feature_map_teacher.float().detach()
             #     print(f"This is the shape of teacher:{output_teacher.shape}")
-            output_student, feature_map_student, loss_list = student(img_a, output_teacher)
+            output_student, feature_map_student, loss_list = student(img_a, img_b, output_teacher)
             # print(f"This is the shape of student:{output_student.shape}")
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             output_student = output_student.float()
@@ -132,7 +132,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if epoch % 10 == 0:
-            outputs = student(temp_img_a, None)
+            outputs = student(temp_img_a, temp_img_b, None)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'

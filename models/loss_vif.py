@@ -10,6 +10,7 @@ from utils.utils_color import RGB_HSV, RGB_YCbCr
 from models.loss_ssim import ssim
 import torchvision.transforms.functional as TF
 
+
 class L_color(nn.Module):
 
     def __init__(self):
@@ -27,6 +28,7 @@ class L_color(nn.Module):
         k = torch.pow(torch.pow(Drg,2) + torch.pow(Drb,2) + torch.pow(Dgb,2),0.5)
         return k
 
+
 class L_Grad(nn.Module):
     def __init__(self):
         super(L_Grad, self).__init__()
@@ -39,7 +41,8 @@ class L_Grad(nn.Module):
         gradient_joint = torch.max(gradient_A, gradient_B)
         Loss_gradient = F.l1_loss(gradient_fused, gradient_joint)
         return Loss_gradient
-        
+
+
 class L_SSIM(nn.Module):
     def __init__(self):
         super(L_SSIM, self).__init__()
@@ -52,6 +55,8 @@ class L_SSIM(nn.Module):
         weight_B = torch.mean(gradient_B) / (torch.mean(gradient_A) + torch.mean(gradient_B))
         Loss_SSIM = weight_A * ssim(image_A, image_fused) + weight_B * ssim(image_B, image_fused)
         return Loss_SSIM
+
+
 class Sobelxy(nn.Module):
     def __init__(self):
         super(Sobelxy, self).__init__()
@@ -65,10 +70,12 @@ class Sobelxy(nn.Module):
         kernely = torch.FloatTensor(kernely).unsqueeze(0).unsqueeze(0)
         self.weightx = nn.Parameter(data=kernelx, requires_grad=False).cuda()
         self.weighty = nn.Parameter(data=kernely, requires_grad=False).cuda()
-    def forward(self,x):
-        sobelx=F.conv2d(x, self.weightx, padding=1)
-        sobely=F.conv2d(x, self.weighty, padding=1)
+
+    def forward(self, x):
+        sobelx = F.conv2d(x, self.weightx, padding=1)
+        sobely = F.conv2d(x, self.weighty, padding=1)
         return torch.abs(sobelx)+torch.abs(sobely)
+
 
 class L_Intensity(nn.Module):
     def __init__(self):

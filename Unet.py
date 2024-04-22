@@ -3,13 +3,9 @@ import torchvision.models as models
 import torch.nn as nn
 import numpy as np
 from torch.nn import functional as F
-import Total_loss
 from Total_loss import TotalLoss
-import pytorch_ssim
 from pytorch_ssim import ssim
-import Grad_loss
 from Grad_loss import L_Grad
-import Intensity_loss
 from Intensity_loss import L_Intensity
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -83,7 +79,7 @@ class UpSample(nn.Module):
         self.Up = nn.Conv2d(channel, channel // 2, 1, 1)
 
     def forward(self, x, r):
-        up = F.interpolate(x, scale_factor=2, mode="nearest")
+        up = F.interpolate(x, scale_factor=2, mode="bilinear")
         x = self.Up(up)
         return torch.cat((x, r), dim=1)
 
@@ -92,7 +88,7 @@ class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
 
-        self.C1 = Conv(1, 64)
+        self.C1 = Conv(2, 64)
         self.D1 = DownSample(64)
         self.C2 = Conv(64, 128)
         self.D2 = DownSample(128)
@@ -128,7 +124,8 @@ class UNet(nn.Module):
         self.Th = torch.nn.Sigmoid()
         self.pred = torch.nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x, feature=None):
+    def forward(self, x, y, feature=None):
+        x = torch.cat((x, y), dim=1)
         R1 = self.C1(x)
         R2 = self.C2(self.D1(R1))
         R3 = self.C3(self.D2(R2))
@@ -162,8 +159,10 @@ class UNet(nn.Module):
 if __name__ == '__main__':
     x = torch.rand(4, 1, 128, 128).to(device)
     y = torch.rand(4, 1, 128, 128).to(device)
+    feature_map = torch.rand(4, 1, 128, 128).to(device)
     net = UNet().to(device)
     net.train()
-    x, _, _ = net(y, x)
+    x, feature, loss_list = net(x, y, feature_map)
+    print(x.shape)
 
 #  不需要加，直接比loss

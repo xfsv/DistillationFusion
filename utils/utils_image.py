@@ -1022,6 +1022,16 @@ def imresize_np(img, scale, antialiasing=True):
     return out_2.numpy()
 
 
+def rgb2grayscale(input_tensor):
+    # 定义转换到灰度图的权重
+    weights = torch.tensor([0.2989, 0.5870, 0.1140]).view(1, 3, 1, 1).to(input_tensor.device)
+
+    # input_tensor的形状应为 (N, 3, H, W)
+    # 使用权重进行加权求和以转换到灰度图
+    grayscale = torch.sum(input_tensor * weights, dim=1, keepdim=True)
+
+    return grayscale
+
 if __name__ == '__main__':
     img = imread_uint('test.bmp', 3)
 #    img = uint2single(img)
