@@ -15,6 +15,7 @@ import os
 from datetime import datetime
 import Total_loss
 from Total_loss import TotalLoss
+from MobileModule import MobileViT, model_config, Transformer
 
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
@@ -85,7 +86,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
     student.train()
 
     loss_log = []
-    model_name = 'with all layer distillation 3.0'
+    model_name = 'Fusion without distillation'
     for epoch in range(epochs):
         running_loss = 0
         start = time.time()
@@ -105,25 +106,16 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 temp_img_b = img_b
                 temp_img_name = image_name
 
-            with torch.no_grad():
-                output_teacher, feature_map_teacher = teacher(img_a, img_b)
-                output_teacher = output_teacher.float().detach()
-                # feature_map_teacher = feature_map_teacher.float().detach()
-            #     print(f"This is the shape of teacher:{output_teacher.shape}")
-            output_student, feature_map_student, loss_list = student(img_a, img_b, output_teacher)
-            # print(f"This is the shape of student:{output_student.shape}")
+            # with torch.no_grad():
+            #     output_teacher, feature_map_teacher = teacher(img_a, img_b)
+            #     output_teacher = output_teacher.float().detach()
+            output_student = student(img_a, img_b)
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
-            output_student = output_student.float()
-            # loss_student_teacher = 1 - ssim(output_student, output_teacher)
-            loss_last_layer = TotalLoss()
-            loss_student_teacher = loss_last_layer(output_student, output_teacher)
-            # loss_feature_map = mse_loss(feature_map_student, feature_map_teacher)
-            # loss_feature_map = 1 - ssim(feature_map_student, feature_map_teacher)
+            # output_student = output_student.float()
+            # loss_last_layer = TotalLoss()
+            # loss_student_teacher = loss_last_layer(output_student, output_teacher)
             loss_total = torch.tensor(0).float().to(device)
-            for loss_num in loss_list:
-                loss_num.to(device)
-                loss_total += loss_num
-            loss_total += loss_student_teacher.to(device) + 0.1 * loss_student.to(device)
+            loss_total += loss_student.to(device)
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
@@ -132,7 +124,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if epoch % 10 == 0:
-            outputs = student(temp_img_a, temp_img_b, None)
+            outputs = student(temp_img_a, temp_img_b)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'
@@ -178,7 +170,20 @@ def main():
     args = parser.parse_args()
 
     teacher = initial_the_teacher_fusion_model(args)
-    student = UNet().to(device)
+
+    config = model_config.get_config("xx_small")
+    original_model = MobileViT.MobileViT(config, num_classes=1000).to(device)
+    weight_path = r'\MobileViT\mobilevit_xxs.pt'
+    weights_dict = torch.load(weight_path, map_location=device)
+    # 删除有关分类类别的权重
+    for k in list(weights_dict.keys()):
+        if "classifier" in k:
+            del weights_dict[k]
+    original_model.load_state_dict(weights_dict, strict=False)
+    for name, para in original_model.named_parameters():
+        if "MobileViT" in name:
+            para.requires_grad_(False)
+    student = UNet(original_model).to(device)
 
     a_dir = os.path.join(args.root_path, args.dataset, args.A_dir)
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
@@ -188,7 +193,7 @@ def main():
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 2
+    epochs = 500
     loss_fn = loss()
     learning_rate = 0.0001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)

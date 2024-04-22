@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
-from Transformer import TransformerEncoder
-from model_config import get_config
+from MobileModule.Transformer import TransformerEncoder
+from MobileModule.model_config import get_config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -528,73 +528,64 @@ class MobileViT(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv_1(x)
-        print(x.shape)
         x = self.layer_1(x)
         x = self.layer_2(x)
 
         x = self.layer_3(x)
         x = self.layer_4(x)
         x = self.layer_5(x)
-        print(x.shape)
         x = self.conv_1x1_exp(x)
         x = self.classifier(x)
         return x
 
 
-class MobileViTEncoder(nn.Module):
+class MobileEncoder(nn.Module):
     def __init__(self, original_model):
-        super(MobileViTEncoder, self).__init__()
+        super(MobileEncoder, self).__init__()
 
-        image_channels = 4
+        image_channels = 2
         out_channels = 16
 
-        self.conv_1 = ConvLayer(
+        self.Conv = ConvLayer(
             in_channels=image_channels,
             out_channels=out_channels,
             kernel_size=3,
-            stride=1
+            stride=2
         )
 
-        self.MobileViT = nn.Sequential(
-            original_model.layer_1,
-            original_model.layer_2,
-            original_model.layer_3,
-            original_model.layer_4,
-            original_model.layer_5
-        )
-
-        self.ChangeChannel = InvertedResidual(
-            in_channels=80,
-            out_channels=1024,
-            expand_ratio=1,
-            stride=1
-        )
+        self.layer_1 = original_model.layer_1
+        self.layer_2 = original_model.layer_2
+        self.layer_3 = original_model.layer_3
+        self.layer_4 = original_model.layer_4
+        self.layer_5 = original_model.layer_5
 
     def forward(self, x):
-        x = self.conv_1(x)
-        x = self.MobileViT(x)
-        x = self.ChangeChannel(x)
+        x = self.Conv(x)
+        x = self.layer_1(x)
+        x = self.layer_2(x)
+        x = self.layer_3(x)
+        x = self.layer_4(x)
+        x = self.layer_5(x)
+        print(x.shape)
+
         return x
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 4, 128, 128).to(device)
+    x = torch.rand(4, 2, 128, 128).to(device)
     config = get_config("xx_small")
     model1 = MobileViT(config, num_classes=1000).to(device)
-    weight_path = r'D:\MobileViT\mobilevit_xxs.pt'
+    weight_path = r'\MobileViT\mobilevit_xxs.pt'
     weights_dict = torch.load(weight_path, map_location=device)
     # 删除有关分类类别的权重
     for k in list(weights_dict.keys()):
         if "classifier" in k:
             del weights_dict[k]
     model1.load_state_dict(weights_dict, strict=False)
-    model2 = MobileViTEncoder(model1).to(device)
-    x = model2(x)
-    for name, para in model2.named_parameters():
+    for name, para in model1.named_parameters():
         if "MobileViT" in name:
             para.requires_grad_(False)
-            print("yes")
-        else:
-            print("no")
+    model = MobileEncoder(model1).to(device)
+    x = model(x)
     print(x.shape)
 
