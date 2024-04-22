@@ -20,8 +20,8 @@ from MobileModule import MobileViT, model_config, Transformer
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
-#   The Infrared
-#   Version: With all layer distillation
+#   Image fusion: concat tow images
+#   Version: With no distillation
 #################################
 
 
@@ -189,7 +189,7 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=16,
+    train_loader = DataLoader(train_set, batch_size=64,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 

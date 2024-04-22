@@ -220,7 +220,7 @@ class UNet(nn.Module):
         O3 = self.C8(self.U3(O2, R2))  # N, 24, 32, 32
         O4 = self.C9(self.U4(O3, R1))  # N, 16, 64, 64
 
-        x = F.interpolate(x, scale_factor=2, mode="bilinear")
+        x = F.interpolate(O4, scale_factor=2, mode="bilinear")
         return self.Th(self.pred(x))
 
 
