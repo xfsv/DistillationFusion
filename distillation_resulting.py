@@ -24,6 +24,7 @@ def logger(model_name, loss_value):
     logging.info(f"Model Name: {model_name}")
     for epoch, loss in enumerate(loss_value, start=1):
         logging.info(f"Epoch {epoch}, Loss: {loss}")
+    logging.info(f"Average loss is {sum(loss_value) / len(loss_value)}")
 
 
 def main():

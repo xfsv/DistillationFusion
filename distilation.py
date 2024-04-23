@@ -20,8 +20,8 @@ from MobileModule import MobileViT, model_config, Transformer
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
-#   Image fusion: concat tow images
-#   Version: With no distillation
+#   Image fusion: concat two images
+#   Version: With last layer distillation
 #################################
 
 
@@ -86,7 +86,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
     student.train()
 
     loss_log = []
-    model_name = 'Fusion without distillation'
+    model_name = 'Fusion with last layer distillation'
     for epoch in range(epochs):
         running_loss = 0
         start = time.time()
@@ -106,16 +106,16 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 temp_img_b = img_b
                 temp_img_name = image_name
 
-            # with torch.no_grad():
-            #     output_teacher, feature_map_teacher = teacher(img_a, img_b)
-            #     output_teacher = output_teacher.float().detach()
+            with torch.no_grad():
+                output_teacher, feature_map_teacher = teacher(img_a, img_b)
+                output_teacher = output_teacher.float().detach()
             output_student = student(img_a, img_b)
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
-            # output_student = output_student.float()
-            # loss_last_layer = TotalLoss()
-            # loss_student_teacher = loss_last_layer(output_student, output_teacher)
+            output_student = output_student.float()
+            loss_last_layer = TotalLoss()
+            loss_student_teacher = loss_last_layer(output_student, output_teacher)
             loss_total = torch.tensor(0).float().to(device)
-            loss_total += loss_student.to(device)
+            loss_total += 0.25 * loss_student + 0.75 * loss_student_teacher
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
@@ -189,7 +189,7 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=64,
+    train_loader = DataLoader(train_set, batch_size=16,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
