@@ -13,6 +13,7 @@ from models.network_swinfusion1 import SwinFusion as net
 from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
+from models import loss_vif
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
 
@@ -57,7 +58,6 @@ def main():
     folder, save_dir, border, window_size = setup(args)
     a_dir = os.path.join(args.root_path, args.dataset, args.A_dir)
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
-    print(a_dir)
     os.makedirs(save_dir, exist_ok=True)
     test_set = D(a_dir, b_dir, args.in_channel)
     test_loader = DataLoader(test_set, batch_size=1,
@@ -78,7 +78,7 @@ def main():
             img_a = torch.cat([img_a, torch.flip(img_a, [3])], 3)[:, :, :, :w_old + w_pad]
             img_b = torch.cat([img_b, torch.flip(img_b, [2])], 2)[:, :, :h_old + h_pad, :]
             img_b = torch.cat([img_b, torch.flip(img_b, [3])], 3)[:, :, :, :w_old + w_pad]
-            output, _ = test(img_a, img_b, model, args, window_size)
+            output = test(img_a, img_b, model, args, window_size)
             output = output[..., :h_old * args.scale, :w_old * args.scale]
             output = output.detach()[0].float().cpu()
         end = time.time()
@@ -128,7 +128,10 @@ def get_image_pair(args, path, a_dir=None, b_dir=None):
 def test(img_a, img_b, model, args, window_size):
     if args.tile is None:
         # test the image as a whole
-        output = model(img_a, img_b)
+        loss = loss_vif.fusion_loss_vif()
+        output, _ = model(img_a, img_b)
+        loss_value, _, _, _ = loss(img_a, img_b, output)
+        print(f'The loss is {loss_value}')
     else:
         # test the image tile by tile
         b, c, h, w = img_a.size()

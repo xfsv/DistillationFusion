@@ -21,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
 #################################
 #   Image fusion: concat two images
-#   Version: With last layer distillation
+#   Version: With  feature map distillation
 #################################
 
 
@@ -91,7 +91,6 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
         running_loss = 0
         start = time.time()
         print(f"--------Epoch: {epoch+1:>3d}--------")
-        mse_loss = nn.MSELoss()
         temp_img_name = 0
         temp_img_b = 0
         temp_img_a = 0
@@ -109,13 +108,19 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
             with torch.no_grad():
                 output_teacher, feature_map_teacher = teacher(img_a, img_b)
                 output_teacher = output_teacher.float().detach()
-            output_student = student(img_a, img_b)
-            loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
+                feature_map_teacher = feature_map_teacher.float().detach()
+            output_student, feature_map_student = student(img_a, img_b)
             output_student = output_student.float()
+
             loss_last_layer = TotalLoss()
+            loss_feature = nn.MSELoss()
+
+            loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
             loss_student_teacher = loss_last_layer(output_student, output_teacher)
+            loss_student_teacher_feature = loss_feature(feature_map_student, feature_map_teacher)
+
             loss_total = torch.tensor(0).float().to(device)
-            loss_total += 0.25 * loss_student + 0.75 * loss_student_teacher
+            loss_total += 0.1 * loss_student + 0.45 * loss_student_teacher + 0.45 * loss_student_teacher_feature
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
@@ -124,7 +129,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if epoch % 10 == 0:
-            outputs = student(temp_img_a, temp_img_b)
+            outputs, _ = student(temp_img_a, temp_img_b)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'

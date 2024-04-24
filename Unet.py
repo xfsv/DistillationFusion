@@ -202,6 +202,10 @@ class UNet(nn.Module):
         self.intensity_loss = L_Intensity()
         self.total_loss = TotalLoss()
 
+        self.regressor = nn.Sequential(
+            nn.Conv2d(16, 60, kernel_size=3, padding=1)
+        )
+
         self.Th = torch.nn.LeakyReLU()
         self.pred = torch.nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=1)
 
@@ -221,7 +225,8 @@ class UNet(nn.Module):
         O4 = self.C9(self.U4(O3, R1))  # N, 16, 64, 64
 
         x = F.interpolate(O4, scale_factor=2, mode="bilinear")
-        return self.Th(self.pred(x))
+        feature_map = self.regressor(x)
+        return self.Th(self.pred(x)), feature_map
 
 
 if __name__ == '__main__':
