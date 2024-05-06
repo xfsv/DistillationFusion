@@ -572,7 +572,7 @@ class MobileEncoder(nn.Module):
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 2, 128, 128).to(device)
+    x = torch.rand(4, 2, 360, 270).to(device)
     config = get_config("xx_small")
     model1 = MobileViT(config, num_classes=1000).to(device)
     weight_path = r'\MobileViT\mobilevit_xxs.pt'

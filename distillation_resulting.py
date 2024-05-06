@@ -46,11 +46,21 @@ def main():
         image_name = test_data['A_path'][0]
         img_a = test_data['A'].to(device)
         img_b = test_data['B'].to(device)
+
+        window_size = 32
         with torch.no_grad():
-            outputs = model(img_a, img_b)
+            _, _, h_old, w_old = img_a.size()
+            h_pad = (h_old // window_size + 1) * window_size - h_old
+            w_pad = (w_old // window_size + 1) * window_size - w_old
+            img_a = torch.cat([img_a, torch.flip(img_a, [2])], 2)[:, :, :h_old + h_pad, :]
+            img_a = torch.cat([img_a, torch.flip(img_a, [3])], 3)[:, :, :, :w_old + w_pad]
+            img_b = torch.cat([img_b, torch.flip(img_b, [2])], 2)[:, :, :h_old + h_pad, :]
+            img_b = torch.cat([img_b, torch.flip(img_b, [3])], 3)[:, :, :, :w_old + w_pad]
+            outputs, _ = model(img_a, img_b)
         running_loss, _, _, _ = loss_fn(img_a, img_b, outputs)
         running_loss = running_loss.item()
         loss_log.append(running_loss)
+        outputs = outputs[..., :h_old, :w_old]
         outputs = outputs.detach()[0].float().cpu()
         outputs = util.tensor2uint(outputs)
         save_dir = r'.\distillation_result'

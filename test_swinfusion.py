@@ -14,9 +14,26 @@ from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
 from models import loss_vif
+from datetime import datetime
+import logging
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
 
+
+def logger(model_name, loss_value):
+    log_dir = r".\distillation_test_log"
+
+    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_filename = f"testing_{current_time}.log"
+
+    logging.basicConfig(filename=os.path.join(log_dir, log_filename),
+                        level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    logging.info(f"Model Name: {model_name}")
+    for epoch, loss in enumerate(loss_value, start=1):
+        logging.info(f"Epoch {epoch}, Loss: {loss}")
+    logging.info(f"Average loss is {sum(loss_value) / len(loss_value)}")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -30,7 +47,7 @@ def main():
                         default='10000')
     parser.add_argument('--root_path', type=str, default='./Dataset/testsets/',
                         help='input test image root folder')
-    parser.add_argument('--dataset', type=str, default='MSRS',
+    parser.add_argument('--dataset', type=str, default='TNO',
                         help='input test image name')
     parser.add_argument('--A_dir', type=str, default='IR',
                         help='input test image name')
@@ -63,6 +80,8 @@ def main():
     test_loader = DataLoader(test_set, batch_size=1,
                              shuffle=False, num_workers=1,
                              drop_last=False, pin_memory=True)
+    loss_list = []
+    loss = loss_vif.fusion_loss_vif()
     for i, test_data in enumerate(test_loader):
         imgname = test_data['A_path'][0]
         img_a = test_data['A'].to(device)
@@ -79,6 +98,8 @@ def main():
             img_b = torch.cat([img_b, torch.flip(img_b, [2])], 2)[:, :, :h_old + h_pad, :]
             img_b = torch.cat([img_b, torch.flip(img_b, [3])], 3)[:, :, :, :w_old + w_pad]
             output = test(img_a, img_b, model, args, window_size)
+            loss_value, _, _, _ = loss(img_a, img_b, output)
+            loss_list.append(loss_value)
             output = output[..., :h_old * args.scale, :w_old * args.scale]
             output = output.detach()[0].float().cpu()
         end = time.time()
@@ -88,7 +109,8 @@ def main():
         print(
             "[{}/{}]  Saving fused image to : {}, Processing time is {:4f} s".format(i + 1, len(test_loader), save_name,
                                                                                      end - start))
-
+    model_name = 'SwinFusion'
+    logger(model_name, loss_list)
 
 def define_model(args):
     model = net(upscale=args.scale, in_chans=args.in_channel, img_size=128, window_size=8,
@@ -128,10 +150,7 @@ def get_image_pair(args, path, a_dir=None, b_dir=None):
 def test(img_a, img_b, model, args, window_size):
     if args.tile is None:
         # test the image as a whole
-        loss = loss_vif.fusion_loss_vif()
         output, _ = model(img_a, img_b)
-        loss_value, _, _, _ = loss(img_a, img_b, output)
-        print(f'The loss is {loss_value}')
     else:
         # test the image tile by tile
         b, c, h, w = img_a.size()

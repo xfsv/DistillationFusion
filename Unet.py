@@ -230,8 +230,8 @@ class UNet(nn.Module):
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 1, 128, 128).to(device)
-    y = torch.rand(4, 1, 128, 128).to(device)
+    x = torch.rand(4, 1, 288, 288).to(device)
+    y = torch.rand(4, 1, 288, 288).to(device)
 
     config = model_config.get_config("xx_small")
     original_model = MobileViT.MobileViT(config, num_classes=1000)
@@ -245,13 +245,10 @@ if __name__ == '__main__':
     for name, para in original_model.named_parameters():
         if "layer_" in name:
             para.requires_grad_(False)
-            print("yes")
-        else:
-            print("no")
     # print(original_model)
     net = UNet(original_model).to(device)
     net.train()
-    x = net(x, y)
+    x, _ = net(x, y)
     print(x.shape)
 
 #  不需要加，直接比loss
