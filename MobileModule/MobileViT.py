@@ -566,7 +566,6 @@ class MobileEncoder(nn.Module):
         x = self.layer_3(x)
         x = self.layer_4(x)
         x = self.layer_5(x)
-        print(x.shape)
 
         return x
 
@@ -583,9 +582,12 @@ if __name__ == '__main__':
             del weights_dict[k]
     model1.load_state_dict(weights_dict, strict=False)
     for name, para in model1.named_parameters():
-        if "MobileViT" in name:
+        if "layer" in name:
+            print('yes')
             para.requires_grad_(False)
+        else:
+            print('no')
     model = MobileEncoder(model1).to(device)
     x = model(x)
-    print(x.shape)
+    # print(x.shape)
 

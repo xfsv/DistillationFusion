@@ -186,7 +186,7 @@ def main():
             del weights_dict[k]
     original_model.load_state_dict(weights_dict, strict=False)
     for name, para in original_model.named_parameters():
-        if "MobileViT" in name:
+        if "layer_" in name:
             para.requires_grad_(False)
     student = UNet(original_model).to(device)
 
