@@ -247,16 +247,18 @@ class RepViT(nn.Module):
         last_channel = None
         skip_connection = []
         for f in self.features:
-            x = f(x)
-            print(x.shape)
-            now_channel = x.shape[1]
-            if now_channel != last_channel and last_channel is not None:
+            temp = f(x)
+            print(temp.shape)
+            now_channel = temp.shape[1]
+            if now_channel != last_channel:
                 skip_connection.append(x)
                 last_channel = now_channel
-            else:
-                last_channel = now_channel
-        # for elem in skip_connection:
-        #     print(elem.shape)
+            x = temp
+        skip_connection.pop(0)
+        skip_connection.append(x)
+        print('---------------------------')
+        for elem in skip_connection:
+            print(elem.shape)
         return x
 
 
@@ -310,7 +312,7 @@ def main():
             para.requires_grad_(False)
     x = torch.rand(1, 3, 384, 288)
     x = original_model(x)
-    print(x.shape[1])
+    # print(x.shape[1])
     # print(original_model.features)
 
 

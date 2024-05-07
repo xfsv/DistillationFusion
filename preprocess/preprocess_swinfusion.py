@@ -14,26 +14,9 @@ from utils import utils_image as util
 from data.dataloder import Dataset as D
 from torch.utils.data import DataLoader
 from models import loss_vif
-from datetime import datetime
-import logging
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
 
-
-def logger(model_name, loss_value):
-    log_dir = r".\distillation_test_log"
-
-    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    log_filename = f"testing_{current_time}.log"
-
-    logging.basicConfig(filename=os.path.join(log_dir, log_filename),
-                        level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
-    logging.info(f"Model Name: {model_name}")
-    for epoch, loss in enumerate(loss_value, start=1):
-        logging.info(f"Epoch {epoch}, Loss: {loss}")
-    logging.info(f"Average loss is {sum(loss_value) / len(loss_value)}")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -42,10 +25,10 @@ def main():
     parser.add_argument('--scale', type=int, default=1, help='scale factor: 1, 2, 3, 4, 8')  # 1 for dn and jpeg car
     parser.add_argument('--large_model', action='store_true', help='use large model, only provided for real image sr')
     parser.add_argument('--model_path', type=str,
-                        default='./Model/Infrared_Visible_Fusion/Infrared_Visible_Fusion/models/')
+                        default='../Model/Infrared_Visible_Fusion/Infrared_Visible_Fusion/models/')
     parser.add_argument('--iter_number', type=str,
                         default='10000')
-    parser.add_argument('--root_path', type=str, default='./Dataset/testsets/',
+    parser.add_argument('--root_path', type=str, default='../Dataset/trainsets/',
                         help='input test image root folder')
     parser.add_argument('--dataset', type=str, default='MSRS',
                         help='input test image name')
@@ -76,12 +59,12 @@ def main():
     a_dir = os.path.join(args.root_path, args.dataset, args.A_dir)
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
     os.makedirs(save_dir, exist_ok=True)
-    test_set = D(a_dir, b_dir, args.in_channel)
-    test_loader = DataLoader(test_set, batch_size=1,
+    train_set = D(a_dir, b_dir, args.in_channel)
+    test_loader = DataLoader(train_set, batch_size=1,
                              shuffle=False, num_workers=1,
                              drop_last=False, pin_memory=True)
-    loss_list = []
-    loss = loss_vif.fusion_loss_vif()
+
+    feature_map_list = []
     for i, test_data in enumerate(test_loader):
         imgname = test_data['A_path'][0]
         img_a = test_data['A'].to(device)
@@ -97,11 +80,11 @@ def main():
             img_a = torch.cat([img_a, torch.flip(img_a, [3])], 3)[:, :, :, :w_old + w_pad]
             img_b = torch.cat([img_b, torch.flip(img_b, [2])], 2)[:, :, :h_old + h_pad, :]
             img_b = torch.cat([img_b, torch.flip(img_b, [3])], 3)[:, :, :, :w_old + w_pad]
-            output = test(img_a, img_b, model, args, window_size)
-            loss_value, _, _, _ = loss(img_a, img_b, output)
-            loss_list.append(loss_value)
+            output, feature_map = te1st(img_a, img_b, model, args, window_size)
             output = output[..., :h_old * args.scale, :w_old * args.scale]
             output = output.detach()[0].float().cpu()
+            feature_map = feature_map.detach()[0].float().cpu()
+            feature_map_list.append(feature_map)
         end = time.time()
         output = util.tensor2uint(output)
         save_name = os.path.join(save_dir, os.path.basename(imgname))
@@ -109,8 +92,8 @@ def main():
         print(
             "[{}/{}]  Saving fused image to : {}, Processing time is {:4f} s".format(i + 1, len(test_loader), save_name,
                                                                                      end - start))
-    model_name = 'SwinFusion'
-    logger(model_name, loss_list)
+    save_feature_map_name = os.path.join(save_dir, 'feature_maps.pt')
+    torch.save(feature_map_list, save_feature_map_name)
 
 def define_model(args):
     model = net(upscale=args.scale, in_chans=args.in_channel, img_size=128, window_size=8,
@@ -126,7 +109,7 @@ def define_model(args):
 
 
 def setup(args):
-    save_dir = f'results/SwinFusion_{args.dataset}'
+    save_dir = f'../Dataset/trainsets/MSRS/SwinFusion_{args.dataset}_process'
     folder = os.path.join(args.root_path, args.dataset, 'A_Y')
     print('folder:', folder)
     border = 0
@@ -135,47 +118,11 @@ def setup(args):
     return folder, save_dir, border, window_size
 
 
-def get_image_pair(args, path, a_dir=None, b_dir=None):
-    a_path = os.path.join(a_dir, os.path.basename(path))
-    b_path = os.path.join(b_dir, os.path.basename(path))
-    print("A image path:", a_path)
-    assert not args.in_channel == 3 or not args.in_channel == 1, "Error in input parameters "
-    img_a = util.imread_uint(a_path, args.in_channel)
-    img_b = util.imread_uint(b_path, args.in_channel)
-    img_a = util.uint2single(img_a)
-    img_b = util.uint2single(img_b)
-    return os.path.basename(path), img_a, img_b
+def te1st(img_a, img_b, model, args, window_size):
+    # test the image as a whole
+    output, feature_map = model(img_a, img_b)
 
-
-def test(img_a, img_b, model, args, window_size):
-    if args.tile is None:
-        # test the image as a whole
-        output, _ = model(img_a, img_b)
-    else:
-        # test the image tile by tile
-        b, c, h, w = img_a.size()
-        tile = min(args.tile, h, w)
-        assert tile % window_size == 0, "tile size should be a multiple of window_size"
-        tile_overlap = args.tile_overlap
-        sf = args.scale
-
-        stride = tile - tile_overlap
-        h_idx_list = list(range(0, h - tile, stride)) + [h - tile]
-        w_idx_list = list(range(0, w - tile, stride)) + [w - tile]
-        E = torch.zeros(b, c, h * sf, w * sf).type_as(img_a)
-        W = torch.zeros_like(E)
-
-        for h_idx in h_idx_list:
-            for w_idx in w_idx_list:
-                in_patch = img_a[..., h_idx:h_idx + tile, w_idx:w_idx + tile]
-                out_patch = model(in_patch)
-                out_patch_mask = torch.ones_like(out_patch)
-
-                E[..., h_idx * sf:(h_idx + tile) * sf, w_idx * sf:(w_idx + tile) * sf].add_(out_patch)
-                W[..., h_idx * sf:(h_idx + tile) * sf, w_idx * sf:(w_idx + tile) * sf].add_(out_patch_mask)
-        output = E.div_(W)
-
-    return output
+    return output, feature_map
 
 
 if __name__ == '__main__':

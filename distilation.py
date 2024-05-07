@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 import torch
-import torch.nn as nn
 import time
 import sys
 from models.network_swinfusion1 import SwinFusion as net
@@ -13,9 +12,7 @@ from Unet import UNet
 import logging
 import os
 from datetime import datetime
-import Total_loss
-from Total_loss import TotalLoss
-from MobileModule import MobileViT, model_config, Transformer
+from RepViTModule import RepViT
 
 device = torch.device("cuda" if torch.cuda.is_available else "cpu")
 
@@ -105,22 +102,22 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 temp_img_b = img_b
                 temp_img_name = image_name
 
-            with torch.no_grad():
-                output_teacher, feature_map_teacher = teacher(img_a, img_b)
-                output_teacher = output_teacher.float().detach()
-                feature_map_teacher = feature_map_teacher.float().detach()
-            output_student, feature_map_student = student(img_a, img_b)
+            # with torch.no_grad():
+            #     output_teacher, feature_map_teacher = teacher(img_a, img_b)
+            #     output_teacher = output_teacher.float().detach()
+            #     feature_map_teacher = feature_map_teacher.float().detach()
+            output_student = student(img_a, img_b)
             output_student = output_student.float()
 
-            loss_last_layer = TotalLoss()
-            loss_feature = nn.MSELoss()
+            # loss_last_layer = TotalLoss()
+            # loss_feature = nn.MSELoss()
 
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
-            loss_student_teacher = loss_last_layer(output_student, output_teacher)
-            loss_student_teacher_feature = loss_feature(feature_map_student, feature_map_teacher)
+            # loss_student_teacher = loss_last_layer(output_student, output_teacher)
+            # loss_student_teacher_feature = loss_feature(feature_map_student, feature_map_teacher)
 
             loss_total = torch.tensor(0).float().to(device)
-            loss_total += 0.1 * loss_student + 0.45 * loss_student_teacher + 0.45 * loss_student_teacher_feature
+            loss_total += loss_student
             loss_total.backward()  # 这个地方一定要注意！！！！
             optimizer.step()
 
@@ -129,7 +126,7 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
         end = time.time()
         if epoch % 10 == 0:
-            outputs, _ = student(temp_img_a, temp_img_b)
+            outputs = student(temp_img_a, temp_img_b)
             outputs = outputs.detach()[0].float().cpu()
             outputs = util.tensor2uint(outputs)
             save_dir = r'.\distillation_result'
@@ -176,9 +173,8 @@ def main():
 
     teacher = initial_the_teacher_fusion_model(args)
 
-    config = model_config.get_config("xx_small")
-    original_model = MobileViT.MobileViT(config, num_classes=1000).to(device)
-    weight_path = r'\MobileViT\mobilevit_xxs.pt'
+    original_model = RepViT.repvit_m1_0()
+    weight_path = r'.\RepViTModule\repvit_m1_0_distill_450e.pth'
     weights_dict = torch.load(weight_path, map_location=device)
     # 删除有关分类类别的权重
     for k in list(weights_dict.keys()):
@@ -186,7 +182,7 @@ def main():
             del weights_dict[k]
     original_model.load_state_dict(weights_dict, strict=False)
     for name, para in original_model.named_parameters():
-        if "layer_" in name:
+        if "features" in name:
             para.requires_grad_(False)
     student = UNet(original_model).to(device)
 

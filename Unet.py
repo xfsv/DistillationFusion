@@ -8,6 +8,7 @@ from pytorch_ssim import ssim
 from Grad_loss import L_Grad
 from Intensity_loss import L_Intensity
 from MobileModule import MobileViT, model_config, Transformer
+from RepViTModule import RepViT
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -169,33 +170,25 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
 
         image_channel = 2
-        out_channel = 16
+        out_channel = 3
         self.Conv = ConvLayer(
             in_channels=image_channel,
             out_channels=out_channel,
-            kernel_size=3,
-            stride=2
+            kernel_size=1,
+            stride=1
         )
 
-        self.layer_1 = original_model.layer_1
-        self.layer_2 = original_model.layer_2
-        self.layer_3 = original_model.layer_3
-        self.layer_4 = original_model.layer_4
-        self.layer_5 = original_model.layer_5
+        self.features = original_model.features
 
-        self.U1 = UpSample(80, 64)
-        self.C6 = Conv(128, 64)
-        self.U2 = UpSample(64, 48)
-        self.C7 = Conv(96, 48)
-        self.U3 = UpSample(48, 24)
-        self.C8 = Conv(48, 24)
-        self.U4 = UpSample(24, 16)
-        self.C9 = Conv(32, 16)
+        self.U1 = UpSample(448, 224)
+        self.C6 = Conv(448, 224)
+        self.U2 = UpSample(224, 112)
+        self.C7 = Conv(224, 112)
+        self.U3 = UpSample(112, 56)
+        self.C8 = Conv(112, 56)
+        self.U4 = UpSample(56, 28)
+        self.C9 = Conv(56, 28)
 
-        self.down1 = DownConvBNRuLU(64, 128)
-        self.down2 = DownConvBNRuLU(128, 256)
-        self.down3 = DownConvBNRuLU(256, 512)
-        self.conv = ConvBNReLU(1, 64)
         self.mse = nn.MSELoss()
         self.grad_loss = L_Grad()
         self.ssim_loss = ssim
@@ -206,49 +199,77 @@ class UNet(nn.Module):
             nn.Conv2d(16, 60, kernel_size=3, padding=1)
         )
 
+        self.generator_1 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=56,
+                out_channels=28,
+                kernel_size=2,
+                stride=2
+            ),
+            nn.BatchNorm2d(28),
+            nn.LeakyReLU()
+        )
+
+        self.generator_2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=28,
+                out_channels=14,
+                kernel_size=2,
+                stride=2
+            ),
+            nn.BatchNorm2d(14),
+            nn.LeakyReLU()
+        )
+
         self.Th = torch.nn.LeakyReLU()
-        self.pred = torch.nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=1)
+        self.pred = torch.nn.Conv2d(14, 1, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, y):
         x = torch.cat((x, y), dim=1)
 
         x = self.Conv(x)  # N, 16, 64, 64
-        R1 = self.layer_1(x)  # N, 16, 64, 64
-        R2 = self.layer_2(R1)  # N, 24, 32, 32
-        R3 = self.layer_3(R2)  # N, 48, 16, 16
-        R4 = self.layer_4(R3)  # N, 64, 8, 8
-        R5 = self.layer_5(R4)  # N, 80, 4, 4
 
-        O1 = self.C6(self.U1(R5, R4))  # N, 64, 8, 8
-        O2 = self.C7(self.U2(O1, R3))  # N, 48, 16, 16
-        O3 = self.C8(self.U3(O2, R2))  # N, 24, 32, 32
-        O4 = self.C9(self.U4(O3, R1))  # N, 16, 64, 64
+        last_channel = None
+        R = []
+        for f in self.features:
+            temp = f(x)
+            now_channel = temp.shape[1]
+            if now_channel != last_channel:
+                R.append(x)
+                last_channel = now_channel
+            x = temp
+        R.pop(0)
+        R.append(x)
 
-        x = F.interpolate(O4, scale_factor=2, mode="bilinear")
-        feature_map = self.regressor(x)
-        return self.Th(self.pred(x)), feature_map
+        O1 = self.C6(self.U1(R[3], R[2]))  # N, 448, 8, 8
+        O2 = self.C7(self.U2(O1, R[1]))  # N, 224, 16, 16
+        O3 = self.C8(self.U3(O2, R[0]))  # N, 112, 32, 32
+
+        x = self.generator_1(O3)
+        x = self.generator_2(x)
+        # x = F.interpolate(O3, scale_factor=2, mode="bilinear")
+        # # feature_map = self.regressor(x)
+        return self.Th(self.pred(x))
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 1, 288, 288).to(device)
-    y = torch.rand(4, 1, 288, 288).to(device)
+    x = torch.rand(4, 1, 512, 672).to(device)
+    y = torch.rand(4, 1, 512, 672).to(device)
 
-    config = model_config.get_config("xx_small")
-    original_model = MobileViT.MobileViT(config, num_classes=1000)
-    weight_path = r'\MobileViT\mobilevit_xxs.pt'
-    weights_dict = torch.load(weight_path, map_location=device)
-    # 删除有关分类类别的权重
+    original_model = RepViT.repvit_m1_0()
+    weight_path = r'.\RepViTModule\repvit_m1_0_distill_450e.pth'
+    weights_dict = torch.load(weight_path)
     for k in list(weights_dict.keys()):
         if "classifier" in k:
             del weights_dict[k]
     original_model.load_state_dict(weights_dict, strict=False)
+
     for name, para in original_model.named_parameters():
-        if "layer_" in name:
+        if 'features' in name:
             para.requires_grad_(False)
-    # print(original_model)
     net = UNet(original_model).to(device)
     net.train()
-    x, _ = net(x, y)
+    x = net(x, y)
     print(x.shape)
 
 #  不需要加，直接比loss
