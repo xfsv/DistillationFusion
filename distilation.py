@@ -204,7 +204,7 @@ def main():
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
-    epochs = 500
+    epochs = 450
     loss_fn = loss()
     learning_rate = 0.0001
     optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)

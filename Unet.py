@@ -197,31 +197,14 @@ class InvertedResidual(nn.Module):
             return self.block(x)
 
 
-class ConvolutionLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, is_last=False):
-        super(ConvolutionLayer, self).__init__()
-        reflection_padding = int(np.floor(kernel_size / 2))
-        self.reflection_pad = nn.ReflectionPad2d(reflection_padding)
-        self.conv2d = nn.Conv2d(in_channels, out_channels, kernel_size, stride)
-        self.dropout = nn.Dropout2d(p=0.5)
-        self.is_last = is_last
-
-    def forward(self, x):
-        out = self.reflection_pad(x)
-        out = self.conv2d(out)
-        if self.is_last is False:
-            out = F.relu(out)
-        return out
-
-
 class DenseBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
         super(DenseBlock, self).__init__()
         out_channels_def = int(in_channels / 2)
         denseblock = []
 
-        denseblock += [ConvolutionLayer(in_channels, out_channels_def, kernel_size, stride),
-                       ConvolutionLayer(out_channels_def, out_channels, 1, stride)]
+        denseblock += [InvertedResidual(in_channels, out_channels_def, stride, expand_ratio=2),
+                       InvertedResidual(out_channels_def, out_channels, stride, expand_ratio=2)]
         self.denseblock = nn.Sequential(*denseblock)
 
     def forward(self, x):
@@ -266,12 +249,9 @@ class UNet(nn.Module):
         self.DB1_3 = block(nb_filter[0] * 3 + nb_filter[1], nb_filter[0], kernel_size, 1)
 
         # generate
-        self.generate = InvertedResidual(
-            in_channels=nb_filter[0] + out_channel,
-            out_channels=1,
-            stride=1,
-            expand_ratio=1
-        )
+        self.Conv_2 = ConvLayer((nb_filter[0] + out_channel), (nb_filter[0] + out_channel) // 2, 3, 1)
+        self.Conv_3 = ConvLayer((nb_filter[0] + out_channel) // 2, (nb_filter[0] + out_channel) // 4, 3, 1)
+        self.generate = ConvLayer((nb_filter[0] + out_channel) // 4, 1, 3, 1)
 
         # loss function
         self.mse = nn.MSELoss()
@@ -302,15 +282,16 @@ class UNet(nn.Module):
 
         x1_3 = self.DB1_3(torch.cat([x2_0, x1_1, x1_2, self.up(x2_2)], 1))
 
-        y = self.up(torch.cat([self.up(x1_3), x1_0], dim=1))
+        y = self.Conv_2(torch.cat([self.up(x1_3), x1_0], dim=1))
+        y = self.up(y)
         outputs = self.generate(y)
 
         return outputs
 
 
 if __name__ == '__main__':
-    x = torch.rand(4, 1, 288, 288).to(device)
-    y = torch.rand(4, 1, 288, 288).to(device)
+    x = torch.rand(4, 1, 128, 128).to(device)
+    y = torch.rand(4, 1, 128, 128).to(device)
 
     config = model_config.get_config("xx_small")
     original_model = MobileViT.MobileViT(config, num_classes=1000)
@@ -328,6 +309,5 @@ if __name__ == '__main__':
     net = UNet(original_model).to(device)
     net.train()
     x = net(x, y)
-    print(x.shape)
 
 #  不需要加，直接比loss

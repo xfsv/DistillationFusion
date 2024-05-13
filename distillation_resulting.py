@@ -34,8 +34,8 @@ def main():
     loss_fn = loss()
     loss_log = []
 
-    a_path = r'.\Dataset\testsets\MSRS\IR'
-    b_path = r'.\Dataset\testsets\MSRS\VI_Y'
+    a_path = r'.\Dataset\testsets\TNO\IR'
+    b_path = r'.\Dataset\testsets\TNO\VI_Y'
     test_set = D(a_path, b_path, 1)
     test_loader = DataLoader(test_set, batch_size=1,
                              shuffle=False, num_workers=1,
@@ -56,7 +56,7 @@ def main():
             img_a = torch.cat([img_a, torch.flip(img_a, [3])], 3)[:, :, :, :w_old + w_pad]
             img_b = torch.cat([img_b, torch.flip(img_b, [2])], 2)[:, :, :h_old + h_pad, :]
             img_b = torch.cat([img_b, torch.flip(img_b, [3])], 3)[:, :, :, :w_old + w_pad]
-            outputs, _ = model(img_a, img_b)
+            outputs = model(img_a, img_b)
         running_loss, _, _, _ = loss_fn(img_a, img_b, outputs)
         running_loss = running_loss.item()
         loss_log.append(running_loss)
