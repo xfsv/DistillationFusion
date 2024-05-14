@@ -250,8 +250,7 @@ class UNet(nn.Module):
 
         # generate
         self.Conv_2 = ConvLayer((nb_filter[0] + out_channel), (nb_filter[0] + out_channel) // 2, 3, 1)
-        self.Conv_3 = ConvLayer((nb_filter[0] + out_channel) // 2, (nb_filter[0] + out_channel) // 4, 3, 1)
-        self.generate = ConvLayer((nb_filter[0] + out_channel) // 4, 1, 3, 1)
+        self.generate = ConvLayer((nb_filter[0] + out_channel) // 2, 1, 3, 1)
 
         # loss function
         self.mse = nn.MSELoss()

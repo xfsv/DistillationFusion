@@ -106,10 +106,10 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
                 temp_img_name = image_name
 
             # model inference
-            # with torch.no_grad():
-            #     output_teacher, feature_map_teacher = teacher(img_a, img_b)
-            #     output_teacher = output_teacher.float().detach()
-            #     feature_map_teacher = feature_map_teacher.float().detach()
+            with torch.no_grad():
+                output_teacher, feature_map_teacher = teacher(img_a, img_b)
+                output_teacher = output_teacher.float().detach()
+                # feature_map_teacher = feature_map_teacher.float().detach()
             output_student = student(img_a, img_b)
             output_student = output_student.float()
 
@@ -119,11 +119,11 @@ def train_knowledge_distillation(teacher, student, train_loader, epochs, optimiz
 
             # count loss
             loss_student, _, _, _ = loss_fn(img_a, img_b, output_student)
-            # loss_student_teacher = loss_last_layer(output_student, output_teacher)
+            loss_student_teacher = loss_last_layer(output_student, output_teacher)
             # loss_student_teacher_feature = loss_feature(feature_map_student, feature_map_teacher)
 
             loss_total = torch.tensor(0).float().to(device)
-            loss_total += loss_student
+            loss_total += 0.25 * loss_student + 0.75 * loss_student_teacher
 
             # optimize
             loss_total.backward()  # 这个地方一定要注意！！！！
@@ -200,7 +200,7 @@ def main():
     b_dir = os.path.join(args.root_path, args.dataset, args.B_dir)
 
     train_set = D(a_dir, b_dir, args.in_channel)
-    train_loader = DataLoader(train_set, batch_size=64,
+    train_loader = DataLoader(train_set, batch_size=16,
                               shuffle=True, num_workers=4,
                               drop_last=True, pin_memory=False)
 
